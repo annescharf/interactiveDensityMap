@@ -1,7 +1,7 @@
 library(shiny)
-library(move)
-library(sp)
-library(raster)
+library(move2)
+library(sf)
+library(terra)
 library(viridis)
 library(mapview)
 library(leaflet)
@@ -9,6 +9,9 @@ library(leaflegend)
 library(shinycssloaders)
 library(webshot)
 # webshot::install_phantomjs() ## add in docker images in moveapps: R -e 'webshot::install_phantomjs()' 
+
+# data <- readRDS("./data/raw/input2_move2loc_LatLon.rds")
+
 
 shinyModuleUserInterface <- function(id, label) {
   ns <- NS(id)
@@ -29,8 +32,8 @@ shinyModuleUserInterface <- function(id, label) {
                       selected = "n_locations"),
           
           sliderInput(inputId = ns("pxSize"), 
-                      label = "Raster pixel size (degrees)", 
-                      value = 0.05, min = 0.01, max = 5), # range in deg, from about 1 km to 500 km
+                      label = "Raster pixel size (Km)", 
+                      value = 100, min = 1, max = 500), # range in deg, from about 1 km to 500 km
           
           checkboxInput(inputId = ns("reverse"), 
                         label = "Reverse color palette", 
@@ -50,47 +53,54 @@ shinyModule <- function(input, output, session, data) {
   current <- reactiveVal(data) 
   
   rmap <- reactive({
-    SP <- SpatialPointsDataFrame(coords=coordinates(data), 
-                                 data=as.data.frame(data), 
-                                 proj4string=CRS("+proj=longlat +ellps=WGS84 +no_defs"))
-    SP$rowNum <- 1:nrow(SP)
-    rr <- raster(ext=extent(SP), resolution=input$pxSize, crs=CRS("+proj=longlat +ellps=WGS84 +no_defs"), vals=NULL)
     
+    
+    merc_pr <- "EPSG:3857"
+    
+    data_red <- mt_as_event_attribute(data, c("taxon_canonical_name", "study_id"))
+    data_red$track_id <- mt_track_id(data_red)
+    data_red$locs <- 1
+    data_red <- dplyr::select(data_red, taxon_canonical_name, study_id, track_id, locs)
+    data_red_p <- st_transform(data_red,merc_pr)
+    vec_data_red <- vect(data_red_p)
+   
+    
+    rr <- rast(extent = st_bbox(data_red_p),resolution = input$pxSize*1000, crs = merc_pr) 
+  
     if(input$var=="n_locations"){
-      SPr <- rasterize(SP, rr, field="rowNum", fun="count", update=TRUE)
+      vec_r <- rasterize(vec_data_red, rr,field="locs", fun="length", update=T)
       legendTitle <- "N. of GPS locations"
     }else if(input$var=="n_individuals"){
-      SPr <- rasterize(SP, rr, field="individual.local.identifier", fun=function(x, ...){length(unique(na.omit(x)))}, update=TRUE)
+      vec_r <- rasterize(vec_data_red, rr, field="track_id", fun=function(x, ...){length(unique(na.omit(x)))}, update=TRUE)
       legendTitle <- "N. of individuals"
     }else if(input$var=="n_species"){
-      SPr <- rasterize(SP, rr, field="individual.taxon.canonical.name", fun=function(x, ...){length(unique(na.omit(x)))}, update=TRUE)
+      vec_r <- rasterize(vec_data_red, rr, field="taxon_canonical_name", fun=function(x, ...){length(unique(na.omit(x)))}, update=TRUE)
       legendTitle <- "N. of species"
     } else if(input$var=="n_studies"){
-      SPr <- rasterize(SP, rr, field="study.id", fun=function(x, ...){length(unique(na.omit(x)))}, update=TRUE)
+      vec_r <- rasterize(vec_data_red, rr, field="study_id", fun=function(x, ...){length(unique(na.omit(x)))}, update=TRUE)
       legendTitle <- "N. of Movebank studies"
     }
-    bounds <- as.vector(bbox(extent(data)))
-    SPr_l <- projectRasterForLeaflet(SPr, method = "ngb")
-    
-    if(max(values(SPr_l), na.rm=T) <= 7){
-      myBins <- length(1:max(values(SPr_l), na.rm=T))
+    # bounds <- as.vector(bbox(extent(data_red_p)))
+
+    if(max(values(vec_r), na.rm=T) <= 7){
+      myBins <- length(1:max(values(vec_r), na.rm=T))
     }else{myBins <- 7}
     
     brewCol <- viridis(7)
     if(myBins == 7){
-      rPal <- colorBin(brewCol, 1:max(values(SPr_l), na.rm=T), reverse = input$reverse,
+      rPal <- colorBin(brewCol, 1:max(values(vec_r), na.rm=T), reverse = input$reverse,
                        na.color = "transparent", bins=myBins)
     }else{
-      rPal <- colorFactor(brewCol[1:myBins], as.factor(1:max(values(SPr_l), na.rm=T)), reverse = input$reverse, 
+      rPal <- colorFactor(brewCol[1:myBins], as.factor(1:max(values(vec_r), na.rm=T)), reverse = input$reverse, 
                           na.color = "transparent")
     }
     
     outl <- leaflet() %>% 
-      fitBounds(bounds[1], bounds[2], bounds[3], bounds[4]) %>% 
+      # fitBounds(bounds[1], bounds[2], bounds[3], bounds[4]) %>%
       addTiles() %>%
       addProviderTiles("Esri.WorldTopoMap", group = "TopoMap") %>%
       addProviderTiles("Esri.WorldImagery", group = "Aerial") %>%
-      addRasterImage(SPr_l, colors = rPal, opacity = 0.7, project = FALSE, group = "raster") %>%
+      addRasterImage(vec_r, colors = rPal, opacity = 0.7, project = FALSE, group = "raster") %>%
       addScaleBar(position="bottomright",
                   options=scaleBarOptions(maxWidth = 100, metric = TRUE, imperial = FALSE, updateWhenIdle = TRUE)) %>%
       addLayersControl(
@@ -98,16 +108,16 @@ shinyModule <- function(input, output, session, data) {
         overlayGroups = "raster",
         options = layersControlOptions(collapsed = FALSE)) #%>%
     # addLegend(position="topright", opacity = 0.6,
-    #              pal = rPal, values = values(SPr_l), title = legendTitle)
+    #              pal = rPal, values = values(vec_r), title = legendTitle)
     
     if(input$var=="n_locations"){
       outl <- outl %>%
         addLegend(position="topright", opacity = 0.6, #bins = myBins, 
-                  pal = rPal, values = 1:max(values(SPr_l), na.rm=T), title = legendTitle)
+                  pal = rPal, values = 1:max(values(vec_r), na.rm=T), title = legendTitle)
     }else{
       outl <- outl %>%
         addLegend(position="topright", opacity = 0.6, 
-                  pal = rPal, values = as.factor(1:max(values(SPr_l), na.rm=T)), title = legendTitle)
+                  pal = rPal, values = as.factor(1:max(values(vec_r), na.rm=T)), title = legendTitle)
     }
     
     outl   
