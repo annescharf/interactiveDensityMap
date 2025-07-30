@@ -33,16 +33,17 @@ shinyModuleUserInterface <- function(id, label) {
           
           sliderInput(inputId = ns("pxSize"), 
                       label = "Raster pixel size (Km)", 
-                      value = 100, min = 1, max = 500), # range in deg, from about 1 km to 500 km
+                      value = 50, min = 1, max = 500), # range in deg, from about 1 km to 500 km
           
           checkboxInput(inputId = ns("reverse"), 
                         label = "Reverse color palette", 
                         value = FALSE), #by default false
+          downloadButton(ns('savePlot'), 'Save Plot'), # for downloading map on local computer
         ), width = 2),
         
         mainPanel(withSpinner(leafletOutput(ns("leafmap"), height="82vh"),type=6, size=2),
                   #actionButton(ns('savePlot'), 'Save Plot'), #for artefact in output
-                  downloadButton(ns('savePlot'), 'Save Plot'), # for downloading map on local computer
+                 
                   width = 10)
       ), tags$head(tags$style(".myRow1{height:25px;background-color: white;}"))
     )
@@ -53,8 +54,6 @@ shinyModule <- function(input, output, session, data) {
   current <- reactiveVal(data) 
   
   rmap <- reactive({
-    
-    
     merc_pr <- "EPSG:3857"
     
     data_red <- mt_as_event_attribute(data, c("taxon_canonical_name", "study_id"))

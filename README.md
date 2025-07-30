@@ -5,33 +5,44 @@ MoveApps
 Github repository: *github.com/mscacco/interactiveDensityMap*
 
 ## Description
-Density raster containing the number of instances of the specified variable overlaid on an interactive map. The user can choose between displaying the number of GPS locations per pixel, the number of individuals, the number of species or the number of Movebank studies. The variable is rasterized on a grid of user-defined resolution (pixel size) and overlaid on a interactive map. The map can be zoomed, the color palette reversed, and the background openstreetmap can be selected as `TopoMap`or `Aerial`. The map interactively updates when the user selects a different variable to display or a different pixel size.
+Density raster containing the number of GPS locations, the number of individuals, the number of species or the number of Movebank studies per pixel overlaid on an interactive map. 
+
+## Documentation
+The user can choose between displaying the number of GPS locations per pixel, the number of individuals, the number of species or the number of Movebank studies. The variable is rasterized on a grid of user-defined resolution (pixel size) and overlaid on a interactive map. The map can be zoomed, the color palette reversed, and the background openstreetmap can be selected as `TopoMap`or `Aerial`. The map interactively updates when the user selects a different variable to display or a different pixel size.
 
 *Suggestion: if the chosen dataset covers a large area and at first you do not see the raster on the map, try increasing the pixel size.*
 
-## Documentation
-This App creates a Shiny UI that allows the interactive visualization of the number of GPS locations, number of individuals and species in different regions of the map. This App extracts from the MoveStack the variable `var` selected by the user (by default the number of GPS locations) and counts the number of instances falling in each raster cell. For further analyses the input data set is also returned.
+### Application scope
+#### Generality of App usability
+This App was developed for any taxonomic group. Specially useful for large datasets.
 
-### Input data
-MoveStack in Movebank format.
+#### Required data properties
+The App should work for any kind of (location) data.
 
-### Output data
-Shiny user interface (UI) and MoveStack in Movebank format.
+### Input type
+`move2::move2_loc`
+
+### Output type
+`move2::move2_loc`
 
 ### Artefacts
-None.
 
-The `Save Plot` button enables a local download of the created plot.
-<!---
-`DensityMap.png`: The visualization produced by the App can be saved (via "Save Plot") in *.png* format to the "Output" folder in Moveapps.
--->
+### Settings 
+`Variable to rasterize`: variable that the user wants to be rasterized as number of occurrences per raster cell. The user can choose one of `N. of GPS locations` (default), `N. of individuals`, `N. of species` or `N. of Movebank studies`.
 
-### Parameters 
-`variable`: variable that the user wants to be rasterized as number of occurrences per raster cell. The user can choose one of `n_locations` (default), `n_individuals`, `n_species` or `n_studies`.
+`Raster pixel size (Km)`: desired resolution (pixel size) of the grid used to rasterize the chosen variable. Range 1-500 km. Unit: `km`. Default: 50.
 
-`reverse palette`: this will allow you to reverse the order of the colors in the palette. For better visualization, we suggest to tick the "reverse color palette" box in combination with an `Aerial` map (the opposite when using a `TopoMap`).
+`Reverse color palette`: this will allow you to reverse the order of the colors in the palette. For better visualization, we suggest to tick the "reverse color palette" box in combination with an `Aerial` map (the opposite when using a `TopoMap`).
 
-`pixel size`: desired resolution (pixel size) of the grid used to rasterize the chosen variable. Unit is degree, with a possible range of *0.01* to *5* degrees (corresponding to about 1 to 500 km). Default value is *0.05*.
+`Save Plot`: the map with the chosen setting can be downloaded as a `.png` file
+
+`Store settings`: click to store the current settings of the App for future Workflow runs. 
+
+### Changes in output data
+
+The input data remains unchanged.
+
+### Most common errors
 
 ### Null or error handling
-If one of the user parameters are not defined, the App will use the default values (`var` = `n_locations` and `pxSize` = *0.05*)
+If your data is not downloaded via de `Movebank Location` App but uploaded via a local upload App, the data set must contain the columns "taxon_canonical_name" and "study_id" to be able to rasterize by species or study id. If these column names are not present in the data set, an error will occurr.
